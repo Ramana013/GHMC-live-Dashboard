@@ -10,15 +10,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 import os
-from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
 
 # Now you can access them securely:
 KOBO_SERVER_URL = os.environ.get('KOBO_SERVER_URL', 'https://kf.kobotoolbox.org')
 KOBO_API_KEY = os.environ.get('KOBO_API_KEY', '')
 KOBO_ASSET_UID = os.environ.get('KOBO_ASSET_UID', '')
+
 # Security
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'fallback-secret-key')

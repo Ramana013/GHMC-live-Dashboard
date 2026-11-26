@@ -226,33 +226,52 @@ def kobo_webhook(request):
         if not kobo_id:
             return JsonResponse({"status": "error", "message": "No _uuid found"}, status=400)
 
-        # Extract data (ensure these match your exact Kobo form field names)
-        gps = payload.get('gps_field_name', [])  # Replace with actual field name
-        lat = gps[0] if len(gps) > 0 else None
-        lon = gps[1] if len(gps) > 1 else None
+        # --- EXACT FIELD MAPPING (Same as your sync function) ---
+        stall_id = payload.get('X1')
+        date_str = payload.get('X4')
+        date_of_assessment = parse_date(date_str) if date_str else None
 
-        # Parse the date and time safely
-        raw_date = payload.get('date_of_assessment')
-        raw_time = payload.get('_submission_time')
+        # SKIP BROKEN RECORDS
+        if not stall_id or not date_of_assessment:
+            return JsonResponse({"status": "skipped", "message": "Missing X1 or X4"}, status=200)
 
-        date_assess = raw_date if raw_date else None
-        sub_time = parse_datetime(raw_time) if raw_time else datetime.now()
+        enumerator_id = payload.get('enumerator') or payload.get('enumerator_id')
+        zonal_officer = payload.get('X3')
+        shop_name = payload.get('X10')
+        owner_name = payload.get('X12')
+        owner_mobile = payload.get('X13')
+        shop_address = payload.get('X16')
+        risk_level = payload.get('final_class')
+
+        # Geolocation
+        geolocation = payload.get('_geolocation', [None, None])
+        lat = geolocation[0] if len(geolocation) > 0 else None
+        lon = geolocation[1] if len(geolocation) > 1 else None
+
+        # Submission Time
+        submission_time_str = payload.get('_submission_time')
+        submission_time = None
+        if submission_time_str:
+            submission_time = parse_datetime(submission_time_str)
+            if submission_time and timezone.is_naive(submission_time):
+                submission_time = timezone.make_aware(submission_time)
 
         # Update or Create the record in Django DB
         submission, created = KoboSubmission.objects.update_or_create(
             kobo_id=kobo_id,
             defaults={
-                'stall_id': payload.get('stall_id', ''),
-                'shop_name': payload.get('shop_name', ''),
-                'owner_name': payload.get('owner_name', ''),
-                'owner_mobile': payload.get('owner_mobile', ''),
-                'zonal_officer_name': payload.get('zonal_officer_name', ''),
-                'submitted_by': payload.get('submitted_by', ''),
-                'risk_level': payload.get('risk_level', ''),
-                'date_of_assessment': date_assess,
+                'stall_id': stall_id,
+                'zonal_officer': zonal_officer,
+                'date_of_assessment': date_of_assessment,
+                'enumerator_id': enumerator_id,
+                'owner_name': owner_name,
+                'owner_mobile': owner_mobile,
+                'shop_name': shop_name,
+                'shop_address': shop_address,
+                'risk_level': risk_level,
                 'latitude': lat,
                 'longitude': lon,
-                'submission_time': sub_time
+                'submission_time': submission_time,
             }
         )
 
@@ -263,7 +282,6 @@ def kobo_webhook(request):
         return JsonResponse({"status": "error", "message": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
-
 
 def index(request):
     # Path to the React index.html
