@@ -24,9 +24,9 @@ from django.utils import timezone
 
 def sync_kobo_data(request):
     # 1. Fetch credentials from Django settings
-    server_url = settings.KOBO_SERVER_URL
-    api_key = settings.KOBO_API_KEY
-    asset_uid = settings.KOBO_ASSET_UID
+    server_url = "https://kf.kobotoolbox.org"  # Use https://eu.kobotoolbox.org if your account is in EU
+    api_key = "490e1541a2696c836d8a6a5c68aee756ad7a3e20"
+    asset_uid = "aQRLoeLb7KzfKuub26mtmu"
 
     url = f"{server_url}/api/v2/assets/{asset_uid}/data/?format=json"
     headers = {"Authorization": f"Token {api_key}"}
