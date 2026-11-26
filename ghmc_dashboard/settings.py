@@ -86,13 +86,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'ghmc_dashboard.wsgi.application'
+import dj_database_url
 
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 DATABASES = {
-    'default':  dj_database_url.config(conn_max_age=600, default='sqlite:///db.sqlite3')
+    'default': dj_database_url.config(conn_max_age=600, default='sqlite:///db.sqlite3')
 
 
     }
