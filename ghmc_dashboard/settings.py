@@ -16,9 +16,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Now you can access them securely:
-KOBO_SERVER_URL = os.getenv('KOBO_SERVER_URL')
-KOBO_API_KEY = os.getenv('KOBO_API_KEY')
-KOBO_ASSET_UID = os.getenv('KOBO_ASSET_UID')
+KOBO_SERVER_URL = os.environ.get('KOBO_SERVER_URL', 'https://kf.kobotoolbox.org')
+KOBO_API_KEY = os.environ.get('KOBO_API_KEY', '')
+KOBO_ASSET_UID = os.environ.get('KOBO_ASSET_UID', '')
 # Security
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'fallback-secret-key')
