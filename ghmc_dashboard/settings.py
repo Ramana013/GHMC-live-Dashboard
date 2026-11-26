@@ -19,7 +19,9 @@ load_dotenv()
 KOBO_SERVER_URL = os.getenv('KOBO_SERVER_URL')
 KOBO_API_KEY = os.getenv('KOBO_API_KEY')
 KOBO_ASSET_UID = os.getenv('KOBO_ASSET_UID')
-
+# Security
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'fallback-secret-key')
 
 from pathlib import Path
 
