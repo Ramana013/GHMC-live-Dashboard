@@ -20,118 +20,82 @@ import requests
 from django.utils import timezone
 
 
-
-
 def sync_kobo_data(request):
-    return JsonResponse({"status": "canary", "message": "I am running the new code!"})
+    # TEMPORARY HARDCODE - Replace these with your real Kobo details
+    server_url = "https://kf.kobotoolbox.org"  # Use https://eu.kobotoolbox.org if you are in EU
+    api_key = "490e1541a2696c836d8a6a5c68aee756ad7a3e20"
+    asset_uid = "aQRLoeLb7KzfKuub26mtmu"
 
-    # 1. Fetch credentials from Django settings
-    server_url = settings.KOBO_SERVER_URL
-    api_key = settings.KOBO_API_KEY
-    asset_uid = settings.KOBO_ASSET_UID
+    # Check if you actually replaced them
+    if "YOUR_ACTUAL" in api_key:
+        return JsonResponse({"error": "You forgot to hardcode the API key!"}, status=400)
 
     url = f"{server_url}/api/v2/assets/{asset_uid}/data/?format=json"
     headers = {"Authorization": f"Token {api_key}"}
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        return JsonResponse({"error": f"Kobo Error: {str(e)}"}, status=500)
 
     total_saved = 0
     total_updated = 0
     total_skipped = 0
 
-    # 2. Loop through paginated data
+    # Loop through and save data
     while url:
-        try:
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()  # Catch HTTP errors
-            data = response.json()
-        except requests.exceptions.RequestException as e:
-            return JsonResponse({"error": f"Failed to fetch data from Kobo: {str(e)}"}, status=500)
-
         results = data.get('results', [])
-
-        # 3. Process each record with EXACT XLSForm field mappings
         for record in results:
             kobo_id = record.get('_uuid')
-
-            # X1 = Stall ID
             stall_id = record.get('X1')
-
-            # Date = X4
             date_str = record.get('X4')
             date_of_assessment = parse_date(date_str) if date_str else None
 
-            # SKIP BROKEN RECORDS: If there is no Stall ID or no Date, don't save it.
             if not stall_id or not date_of_assessment:
                 total_skipped += 1
                 continue
 
-            # enumerator_id = Enumerator
-            enumerator_id = record.get('enumerator') or record.get('enumerator_id')
-
-            # X3 = Zonal officer (supervisor)
-            zonal_officer = record.get('X3')
-
-            # X10 = Site / shop name
-            shop_name = record.get('X10')
-
-            # X12 = Owner name
-            owner_name = record.get('X12')
-
-            # X13 = Owner contact number
-            owner_mobile = record.get('X13')
-
-            # X16 = Shop address
-            shop_address = record.get('X16')
-
-            # final_class = Risk Level
-            risk_level = record.get('final_class')
-
-            # Geolocation (Kobo standard array)
             geolocation = record.get('_geolocation', [None, None])
             lat = geolocation[0] if len(geolocation) > 0 else None
             lon = geolocation[1] if len(geolocation) > 1 else None
 
-            # Submission Time
-            submission_time_str = record.get('_submission_time')
-            submission_time = None
-            if submission_time_str:
-                submission_time = parse_datetime(submission_time_str)
-                if submission_time and timezone.is_naive(submission_time):
-                    submission_time = timezone.make_aware(submission_time)
-
-            # 4. Save to Database
             obj, created = KoboSubmission.objects.update_or_create(
                 kobo_id=kobo_id,
                 defaults={
                     'stall_id': stall_id,
-                    'zonal_officer': zonal_officer,
+                    'zonal_officer': record.get('X3'),
                     'date_of_assessment': date_of_assessment,
-                    'enumerator_id': enumerator_id,
-                    'owner_name': owner_name,
-                    'owner_mobile': owner_mobile,
-                    'shop_name': shop_name,
-                    'shop_address': shop_address,
-                    'risk_level': risk_level,
+                    'enumerator_id': record.get('enumerator') or record.get('enumerator_id'),
+                    'owner_name': record.get('X12'),
+                    'owner_mobile': record.get('X13'),
+                    'shop_name': record.get('X10'),
+                    'shop_address': record.get('X16'),
+                    'risk_level': record.get('final_class'),
                     'latitude': lat,
                     'longitude': lon,
-                    'submission_time': submission_time,
+                    'submission_time': timezone.now(),
                 }
             )
-
             if created:
                 total_saved += 1
             else:
                 total_updated += 1
 
-        # Move to next page
         url = data.get('next')
+        if url:
+            response = requests.get(url, headers=headers)
+            data = response.json()
 
     return JsonResponse({
         "status": "success",
-        "message": "Sync complete!",
+        "message": "Hardcoded sync complete!",
         "created": total_saved,
         "updated": total_updated,
         "skipped": total_skipped
     }, status=200)
+
 
 class KoboSubmissionListView(generics.ListAPIView):
     queryset = KoboSubmission.objects.all().order_by('-submission_time')
