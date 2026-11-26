@@ -33,10 +33,9 @@ REACT_BUILD_DIR = os.path.join(BASE_DIR, 'ghmc-frontend', 'build')
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-npm)9^yz29-7oe@$7$o%4zn^n24gzj1732h=_!q%*=f4sd41y9'
+# SECRET_KEY = 'django-insecure-npm)9^yz29-7oe@$7$o%4zn^n24gzj1732h=_!q%*=f4sd41y9'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
