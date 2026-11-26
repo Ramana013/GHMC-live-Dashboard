@@ -36,7 +36,7 @@ SECRET_KEY = 'django-insecure-npm)9^yz29-7oe@$7$o%4zn^n24gzj1732h=_!q%*=f4sd41y9
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -53,15 +53,12 @@ INSTALLED_APPS = [
     'rest_framework',
     'dashboard',
     'corsheaders',
-    'django_celery_beat',
-]
-# Celery Broker configuration (assuming Redis is running locally by default)
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
 
-# Use django-celery-beat database scheduler
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+]
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -95,11 +92,11 @@ WSGI_APPLICATION = 'ghmc_dashboard.wsgi.application'
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    'default':  dj_database_url.config(conn_max_age=600, default='sqlite:///db.sqlite3')
+
+
     }
-}
+
 
 
 # Password validation
@@ -140,10 +137,15 @@ STATIC_URL = 'static/'
 
 # Tell Django to look for static files in the React build folder
 STATICFILES_DIRS = [
-    os.path.join(REACT_BUILD_DIR, 'static'),
+    os.path.join(BASE_DIR, 'ghmc-frontend', 'build', 'static'),
 ]
 
-
+# 5. WhiteNoise compression
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 # The directory where Django will collect static files for production
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
@@ -160,10 +162,3 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 CORS_ALLOW_ALL_ORIGINS = True
-from celery.schedules import crontab
-CELERY_BEAT_SCHEDULE = {
-    'sync-kobo-every-5-seconds': {
-        'task': 'dashboard.tasks.sync_kobo_data_task',
-        'schedule': 5.0,  # Directly write seconds
-    },
-}
