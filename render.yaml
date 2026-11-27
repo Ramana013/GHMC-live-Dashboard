@@ -9,7 +9,8 @@ services:
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
       python manage.py migrate
-      python manage.py load_excel
+    # Key modification: Move the data loading command here
+    preDeployCommand: python manage.py load_excel
     startCommand: gunicorn ghmc_dashboard.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DATABASE_URL
