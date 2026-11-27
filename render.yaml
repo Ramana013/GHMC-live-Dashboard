@@ -3,14 +3,7 @@ services:
     name: ghmc-dashboard-web
     runtime: python
     plan: free
-    buildCommand: |
-      cd ghmc-frontend && npm install && npm run build
-      cd ..
-      pip install -r requirements.txt
-      python manage.py collectstatic --noinput
-      python manage.py migrate
-    # Key modification: Move the data loading command here
-    preDeployCommand: python manage.py load_excel
+    buildCommand: "./build.sh"
     startCommand: gunicorn ghmc_dashboard.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: DATABASE_URL
