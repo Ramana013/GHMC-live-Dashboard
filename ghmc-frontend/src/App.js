@@ -50,7 +50,10 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
-  useEffect(() => {
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(null);
+
+  const fetchDashboardData = () => {
     Promise.all([
       axios.get('/api/submissions/'),
       axios.get('/api/target-shops/')
@@ -65,6 +68,10 @@ function App() {
       setTargetShops(targetRes.data);
     })
     .catch(error => console.error("Error fetching data:", error));
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
   useEffect(() => {
@@ -79,6 +86,29 @@ function App() {
         setLoading(false);
       });
   }, []);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const response = await axios.get('/api/kobo-sync/');
+      if (response.data.status === 'success') {
+        setSyncMessage({
+          title: "Sync Complete!",
+          created: response.data.created,
+          updated: response.data.updated
+        });
+      }
+      fetchDashboardData();
+    } catch (error) {
+      setSyncMessage({
+        title: "Sync Failed",
+        created: 0,
+        updated: 0,
+        error: "Could not connect to the server."
+      });
+    }
+    setSyncing(false);
+  };
 
   const getAdminDetails = (lat, lon) => {
     if (!lat || !lon || !wardsData || !wardsData.features) {
@@ -104,9 +134,7 @@ function App() {
 
           return { ward, circle, zone };
         }
-      } catch (e) {
-        console.error("Error parsing polygon", e);
-      }
+      } catch (e) {}
     }
     return { ward: "N/A", circle: "N/A", zone: "N/A" };
   };
@@ -116,20 +144,17 @@ function App() {
     return { ...sub, calculatedZone: details.zone, calculatedWard: details.ward, calculatedCircle: details.circle };
   });
 
-  // --- BULLETPROOF MERGED DATA LOGIC ---
   const mergedMapData = [];
 
-  // 1. Map through target shops
   targetShops.forEach((target, index) => {
     const targetName = (target.shop_name || "").toLowerCase().trim();
-
     const koboMatch = processedSubmissions.find(sub => {
       const koboName = (sub.shop_name || "").toLowerCase().trim();
       return koboName.includes(targetName) || targetName.includes(koboName);
     });
 
     if (koboMatch) {
-      koboMatch.isMatched = true; // Mark as matched safely
+      koboMatch.isMatched = true;
       mergedMapData.push({
         id: `merged-${target.id || index}`,
         shop_name: koboMatch.shop_name,
@@ -151,7 +176,6 @@ function App() {
     }
   });
 
-  // 2. Add unmatched Kobo submissions
   processedSubmissions.forEach((sub, index) => {
     if (!sub.isMatched && sub.latitude && sub.longitude) {
       mergedMapData.push({
@@ -165,16 +189,13 @@ function App() {
     }
   });
 
-  // Stats
   const totalCount = mergedMapData.length;
   const completedCount = processedSubmissions.length;
   const remainingCount = totalCount - completedCount;
 
-  // --- FILTER LOGIC ---
   const filteredMergedData = mergedMapData.filter(item => {
     const s = searchTerm.toLowerCase();
     const sub = item.details || {};
-
     return (
       (item.shop_name || "").toLowerCase().includes(s) ||
       (sub.stall_id || "").toLowerCase().includes(s) ||
@@ -215,15 +236,51 @@ function App() {
   if (loading) return <div style={{ padding: '20px', fontSize: '20px' }}>Loading Dashboard Data...</div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
-      <header style={{ padding: '15px 20px', backgroundColor: '#2c3e50', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ margin: 0 }}>GHMC Routing Dashboard</h2>
+    <div className="dashboard-container">
+
+      {/* CUSTOM MODAL OVERLAY */}
+      {syncMessage && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            backgroundColor: 'white', padding: '30px', borderRadius: '8px',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.2)', minWidth: '300px', textAlign: 'center'
+          }}>
+            <h3 style={{ marginTop: 0, color: syncMessage.error ? 'red' : '#2c3e50' }}>
+              {syncMessage.title}
+            </h3>
+            {syncMessage.error ? (
+              <p style={{ color: 'red' }}>{syncMessage.error}</p>
+            ) : (
+              <div style={{ fontSize: '16px', marginBottom: '20px', textAlign: 'left' }}>
+                <p style={{ margin: '5px 0' }}><b>New Records:</b> {syncMessage.created}</p>
+                <p style={{ margin: '5px 0' }}><b>Updated Records:</b> {syncMessage.updated}</p>
+              </div>
+            )}
+            <button
+              onClick={() => setSyncMessage(null)}
+              style={{
+                padding: '10px 20px', backgroundColor: '#3498db', color: 'white',
+                border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px'
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+
+      <header className="header">
+        <h2 style={{ margin: 0, fontSize: '20px' }}>GHMC Routing Dashboard</h2>
       </header>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="main-content">
 
         {/* LEFT SIDEBAR */}
-        <div style={{ width: '50%', backgroundColor: '#f9f9f9', borderRight: '1px solid #ccc', display: 'flex', flexDirection: 'column' }}>
+        <div className="sidebar">
           <div style={{ display: 'flex', borderBottom: '1px solid #ccc' }}>
             <button onClick={() => setActiveTab('table')} style={{ flex: 1, padding: '10px', backgroundColor: activeTab === 'table' ? 'white' : '#e2e8f0', border: 'none', cursor: 'pointer', fontWeight: activeTab==='table'?'bold':'normal' }}>Survey Data</button>
             <button onClick={() => setActiveTab('analytics')} style={{ flex: 1, padding: '10px', backgroundColor: activeTab === 'analytics' ? 'white' : '#e2e8f0', border: 'none', cursor: 'pointer', fontWeight: activeTab==='analytics'?'bold':'normal' }}>Analytics</button>
@@ -244,36 +301,52 @@ function App() {
             )}
             {activeTab === 'table' && (
               <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <h3 style={{ marginTop: 0 }}>Total Completed Surveys: {filteredSubmissions.length}</h3>
+
+                {/* TITLE AND SYNC BUTTON ROW */}
+                <div className="title-row">
+                  <h3 style={{ margin: 0 }}>Total Completed Surveys: {filteredSubmissions.length}</h3>
+                  <button
+                    onClick={handleSync}
+                    disabled={syncing}
+                    style={{
+                      padding: '8px 15px', backgroundColor: syncing ? '#95a5a6' : '#27ae60',
+                      color: 'white', border: 'none', borderRadius: '4px', fontSize: '14px',
+                      cursor: syncing ? 'not-allowed' : 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {syncing ? 'Syncing...' : '🔄 Sync Live Data'}
+                  </button>
+                </div>
+
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                   <input type="text" placeholder="Search by anything..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
                 </div>
 
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <div className="table-wrapper" style={{ flex: 1, overflowY: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', backgroundColor: 'white', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                     <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                       <tr style={{ backgroundColor: '#e2e8f0', textAlign: 'left' }}>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Date</th>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Shop Name</th>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Zone</th>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Ward</th>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Circle</th>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Officer</th>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Submitted By</th>
-                        <th style={{ padding: '8px', borderBottom: '2px solid #cbd5e1' }}>Risk</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Date</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Shop Name</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Zone</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Ward</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Circle</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Officer</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Submitted By</th>
+                        <th style={{ padding: '6px', borderBottom: '2px solid #cbd5e1' }}>Risk</th>
                       </tr>
                     </thead>
                     <tbody>
                       {currentTableData.map(sub => (
                         <tr key={sub.kobo_id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '8px' }}>{sub.date_of_assessment || "N/A"}</td>
-                          <td style={{ padding: '8px' }}>{sub.shop_name || "N/A"}</td>
-                          <td style={{ padding: '8px' }}>{sub.calculatedZone}</td>
-                          <td style={{ padding: '8px' }}>{sub.calculatedWard}</td>
-                          <td style={{ padding: '8px' }}>{sub.calculatedCircle}</td>
-                          <td style={{ padding: '8px' }}>{sub.zonal_officer_name || "N/A"}</td>
-                          <td style={{ padding: '8px' }}>{sub.submitted_by || "N/A"}</td>
-                          <td style={{ padding: '8px', fontWeight: 'bold', color: getRiskColor(sub.risk_level) }}>
+                          <td style={{ padding: '6px' }}>{sub.date_of_assessment || "N/A"}</td>
+                          <td style={{ padding: '6px' }}>{sub.shop_name || "N/A"}</td>
+                          <td style={{ padding: '6px' }}>{sub.calculatedZone}</td>
+                          <td style={{ padding: '6px' }}>{sub.calculatedWard}</td>
+                          <td style={{ padding: '6px' }}>{sub.calculatedCircle}</td>
+                          <td style={{ padding: '6px' }}>{sub.zonal_officer_name || "N/A"}</td>
+                          <td style={{ padding: '6px' }}>{sub.submitted_by || "N/A"}</td>
+                          <td style={{ padding: '6px', fontWeight: 'bold', color: getRiskColor(sub.risk_level) }}>
                             {sub.risk_level || "N/A"}
                           </td>
                         </tr>
@@ -299,7 +372,7 @@ function App() {
         </div>
 
         {/* RIGHT MAP */}
-        <div style={{ width: '50%', position: 'relative' }}>
+        <div className="map-container">
           <MapContainer center={[17.3850, 78.4867]} zoom={11} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -314,11 +387,9 @@ function App() {
                 pinColor = getRiskColor(item.details.risk_level);
               }
 
-              // Safely convert coordinates to numbers
               const lat = Number(item.latitude);
               const lon = Number(item.longitude);
 
-              // If data is invalid, don't render the marker (prevents Leaflet from crashing silently)
               if (isNaN(lat) || isNaN(lon)) {
                 return null;
               }
