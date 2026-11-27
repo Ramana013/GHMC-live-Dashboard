@@ -20,6 +20,31 @@ import requests
 from django.utils import timezone
 
 
+# ==========================================
+# HELPER FUNCTION FOR TARGET STATUS
+# ==========================================
+def update_target_shops_status():
+    """
+    Cross-references Kobo submissions with Target Shops.
+    Updates the 'is_completed' status based on matching names.
+    """
+    kobo_shops = KoboSubmission.objects.exclude(shop_name__isnull=True).values_list('shop_name', flat=True)
+    kobo_shops_lower = set(str(s).strip().lower() for s in kobo_shops)
+
+    updated_targets = []
+    for target in TargetShop.objects.all():
+        is_completed = target.shop_name.strip().lower() in kobo_shops_lower
+        if target.is_completed != is_completed:
+            target.is_completed = is_completed
+            updated_targets.append(target)
+
+    if updated_targets:
+        TargetShop.objects.bulk_update(updated_targets, ['is_completed'])
+
+
+# ==========================================
+# MAIN SYNC FUNCTION
+# ==========================================
 def sync_kobo_data(request):
     # 1. Fetch credentials from Django settings (Render Environment Variables)
     server_url = settings.KOBO_SERVER_URL
@@ -132,15 +157,21 @@ def sync_kobo_data(request):
         # Move to next page
         url = data.get('next')
 
+    # NEW: Update the Target Shop statuses now that Kobo data is synced
+    update_target_shops_status()
+
     return JsonResponse({
         "status": "success",
-        "message": "Sync complete!",
+        "message": "Sync complete! Target shops updated.",
         "created": total_saved,
         "updated": total_updated,
         "skipped": total_skipped
     }, status=200)
 
 
+# ==========================================
+# WEBHOOK
+# ==========================================
 @csrf_exempt
 @require_POST
 def kobo_webhook(request):
@@ -213,6 +244,9 @@ def kobo_webhook(request):
             }
         )
 
+        # Update target shop statuses on live webhook ping as well
+        update_target_shops_status()
+
         status_text = "Created" if created else "Updated"
         return JsonResponse({"status": "success", "message": f"Submission {status_text}"}, status=200)
 
@@ -222,6 +256,9 @@ def kobo_webhook(request):
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 
+# ==========================================
+# API VIEWS
+# ==========================================
 class KoboSubmissionListView(generics.ListAPIView):
     queryset = KoboSubmission.objects.all().order_by('-submission_time')
     serializer_class = KoboSubmissionSerializer
@@ -274,21 +311,11 @@ class UploadTargetShopsView(APIView):
                         )
                         total_added += 1
 
-            # Cross-reference with Kobo data
-            kobo_shops = KoboSubmission.objects.exclude(shop_name__isnull=True).values_list('shop_name', flat=True)
-            kobo_shops_lower = [str(s).strip().lower() for s in kobo_shops]
-
-            completed_count = 0
-            for target in TargetShop.objects.all():
-                if target.shop_name.strip().lower() in kobo_shops_lower:
-                    target.is_completed = True
-                else:
-                    target.is_completed = False
-                target.save()
-                if target.is_completed:
-                    completed_count += 1
+            # Cross-reference with Kobo data using the new helper function
+            update_target_shops_status()
 
             total_targets = TargetShop.objects.count()
+            completed_count = TargetShop.objects.filter(is_completed=True).count()
 
             return Response({
                 "status": "success",
